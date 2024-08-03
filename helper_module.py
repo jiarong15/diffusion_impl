@@ -3,6 +3,10 @@ from torch.nn import functional as F
 import torch
 
 class DoubleConv(nn.Module):
+    '''
+    Used in initial convolution of images as well as 
+    at the bottom of the the U shape net.
+    '''
     def __init__(self, in_channels, out_channels, mid_channels=None, residual=False):
 
         super().__init__()
@@ -42,19 +46,20 @@ class DoubleConv(nn.Module):
         
 
 
-
-
 class Down(nn.Module):
     def __init__(self, in_channels, out_channels, emb_dim=256):
         super().__init__()
 
         self.maxpool_conv = nn.Sequential(
+            ## We perform a maxpooling using a kernel of size 2x2
             nn.MaxPool2d(2),
             DoubleConv(in_channels, in_channels, residual=True),
             DoubleConv(in_channels, out_channels)
         )
 
         self.emb_layer = nn.Sequential(
+
+            # Sigmoid linear Unit
             nn.SiLU(),
             nn.Linear(emb_dim, out_channels)
         )
@@ -74,7 +79,10 @@ class Up(nn.Module):
 
         ## We perform bilinear interpolation to increase the 
         ## size of the image data that we parse through this layer
+        ## since scale factor is 2, each data point is doubled
+        ## across x and y axes since we are dealing with 2D image data vectors
         self.up = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=True)
+
         self.conv = nn.Sequential(
             DoubleConv(in_channels, in_channels, residual=True),
             DoubleConv(in_channels, out_channels, in_channels // 2)

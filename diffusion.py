@@ -38,6 +38,10 @@ class Diffusion:
         x(t) denotes the image at timestep t
         x(0) denotes the original image
         '''
+
+        ## After sampling alpha and beta at time step i, it becomes a 
+        ## 1D tensor. [:, None, None, None] changes the dimensions to
+        ## this shape (n, 1, 1, 1)
         sqrt_alpha_hat = torch.sqrt(self.alpha_hat[t])[:, None, None, None]
         sqrt_one_minus_alpha_hat = torch.sqrt(1. - self.alpha_hat[t])[:, None, None, None]
 
@@ -52,11 +56,14 @@ class Diffusion:
     
     def sample_timesteps(self, n):
         '''
-        
+        Generates a tensor of size n where the numbers in tensor
+        ranges from (1, self.noise_steps). In this case self.noise_steps
+        is the amount of steps going from an image x(t) of pure gaussian noise
+        to x(0) of the original image used for training.
         '''
         return torch.randint(low=1, high=self.noise_steps, size=(n,))
 
-    def sample(self, model, n):
+    def sample(self, model, labels, n, cfg_scale=3):
 
         ## Used to switch off behaviours in layers/parts
         ## of the ML model even as we inference it in the loop
@@ -80,10 +87,23 @@ class Diffusion:
                 ## timestep i for n times below as used in self.alpha[t]
                 ## as well as for indicating model prediction at a particular timestep.
                 t = (torch.ones(n) * i).long().to(self.device)
-                predicted_noise = model(x, t)
+                predicted_noise = model(x, t, labels)
 
-                ## After sampling alpha and beta at time step i, it becomes a 
-                ## 1D tensor. [:, None, None, None] changes the dimensions to
+                ## We don't want to include the labels, so
+                ## we are just conditioning on the time
+                ## and leaving out the labels
+                unconditioned_predicted_noise = model(x, t, None)
+
+                ## We then perform linear interpolation to move towards
+                ## the conditional sample over the unconditional sample
+                ## as following the CFG formula
+                predicted_noise = torch.lerp(unconditioned_predicted_noise,
+                                             predicted_noise,
+                                             cfg_scale)
+
+                ## After sampling alpha, alpha_hat and beta at time step i, it 
+                ## becomes a 1D tensor.
+                ## [:, None, None, None] changes the dimensions to
                 ## this shape (n, 1, 1, 1)
                 alpha = self.alpha[t][:, None, None, None]
                 alpha_hat = self.alpha_hat[t][:, None, None, None]
@@ -106,7 +126,7 @@ class Diffusion:
                 ## an image constructed from gaussian noise. Additionally, we are trying to
                 ## train mu(theta) to be as close to the mu(t) formula derived mathematically
                 ## in the proof of q(x(t-1) | x(t), x(0)), hence we are using the predicted_noise
-                ## in this scenario.
+                ## in this scenario. Algorithm 2 of the paper
                 x = (1 / torch.sqrt(alpha)) * (x - ((1 - alpha) / (torch.sqrt(1 - alpha_hat))) * predicted_noise) + torch.sqrt(beta) * noise
         
         ## Turning back to training mode after inference

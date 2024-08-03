@@ -5,7 +5,7 @@ import torch
 
 ## Implementing one of the commonly used architectures in diffusion models
 class UNet(nn.Module):
-    def __init__(self, c_in=3, c_out=3, time_dim=256, device='cuda'):
+    def __init__(self, c_in=3, c_out=3, num_classes=None, time_dim=256, device='cuda'):
         ## c_in and c_out denotes the channels of the image
         ## In this case, both take the value 3.
         super().__init__()
@@ -48,40 +48,73 @@ class UNet(nn.Module):
 
         self.outc = nn.Conv2d(64, c_out, kernel_size=1)
 
+        if num_classes is not None:
+            ## We try to condition on the classes that we may know of 
+            ## to help improve our model as part of Classifier Free Guidance
+            ## The number of embeddings will be the image classes and
+            ## it has to be the same dimension as our time tensors
+            ## as we are conditioning the noise learnt on both to improve
+            ## training accuracy.
+            self.label_embedding = nn.Embedding(num_classes, time_dim)
 
 
     def pos_encoding(self, t, channels):
-        inv_freq = 1.0 / (10000**(torch.arange(0, channels, 2, device=self.device).float() / channels))
-        pos_enc_a = torch.sin(t.repeat(1, channels // 2) * inv_freq)
-        pos_enc_b = torch.cos(t.repeat(1, channels // 2) * inv_freq)
-        pos_enc = torch.cat([pos_enc_a, pos_enc_b], dim=-1)
-        return pos_enc
-    
+        '''
+        Usage of the positional embedding formula
+        '''
+        even_inv_freq = 1.0 / (10000**(torch.arange(0, channels, 2, device=self.device).float() / channels))
+        odd_inv_freq = 1.0 / (10000**(torch.arange(1, channels, 2, device=self.device).float() / channels))
 
-    def forward(self, x, t):
+        ## We encode the odd and even indices in their respective 
+        ## manner following the positional encoding methodology. The encoding is
+        ## as from [[A], [B], [C]] -> [[(channels // 2) no. of As], 
+        ##                             [(channels // 2) no. of Bs],
+        ##                             [(channels // 2) no. of Cs]]
+        pos_even_enc_a = torch.sin(t.repeat(1, channels // 2) * even_inv_freq)
+        pos_odd_enc_b = torch.cos(t.repeat(1, channels // 2) * odd_inv_freq)
+
+        ## Stack the even and odd tensors along y axis
+        pos_enc = torch.cat([pos_even_enc_a, pos_odd_enc_b], dim=-1)
+        return pos_enc
+
+
+    def forward(self, x, t, y):
+        '''
+        x: x_t function (e.g. x(75) = sqrt(alpha(75)) * x(0) +  sqrt(1 - alpha(75)) * epsilon)
+        t: randomly chosen timestep expressed as a 1D tensor
+        y: image label data that are provided
+        '''
+
+        ## Transform the flat time tensors into their appropriate shape
+        ## to encode its positional embeddings. Unsqueeze(-1)
+        ## transforms it from [a,b,c] -> [[a], [b], [c]] with each
+        ## value being float.
         t = t.unsqueeze(-1).type(torch.float)
         t = self.pos_encoding(t, self.time_dim)
 
-        x1 = self.inc(x)
-        x2 = self.down1(x1, t)
-        x2 = self.sa1(x2)
-        x3 = self.down2(x2, t)
-        x3 = self.sa2(x3)
-        x4 = self.down3(x3, t)
-        x4 = self.sa3(x4)
+        if y is not None:
+            t += self.label_embedding(y)
 
-        x4 = self.bot1(x4)
-        x4 = self.bot2(x4)
-        x4 = self.bot3(x4)
+        x1 = self.inc(x) # DoubleConv
+        x2 = self.down1(x1, t) # Down
+        x2 = self.sa1(x2) # SelfAttention
+        x3 = self.down2(x2, t) # Down
+        x3 = self.sa2(x3) # SelfAttention
+        x4 = self.down3(x3, t) # Down
+        x4 = self.sa3(x4) # SelfAttention
+
+        x4 = self.bot1(x4) # DoubleConv
+        x4 = self.bot2(x4) # DoubleConv
+        x4 = self.bot3(x4) # DoubleConv
 
         ## The upsampling here has skip connections
-        x = self.up1(x4, x3, t)
-        x = self.sa4(x)
-        x = self.up2(x, x2, t)
-        x = self.sa5(x)
-        x = self.up3(x, x1, t)
-        x = self.sa6(x)
-        output = self.outc(x)
+        x = self.up1(x4, x3, t) # Up
+        x = self.sa4(x) # SelfAttention
+        x = self.up2(x, x2, t) # Up
+        x = self.sa5(x) # SelfAttention
+        x = self.up3(x, x1, t) # Up
+        x = self.sa6(x) # SelfAttention
+        output = self.outc(x) # Conv2D for to match final output image dimension
         return output
 
 
