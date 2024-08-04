@@ -8,6 +8,8 @@ from diffusion_package.unet_model import UNet
 from diffusion_package.diffusion import Diffusion
 from diffusion_package.utils import get_data_loader
 
+class Args:
+    pass
 
 def train(args):
     device = args.device
@@ -86,8 +88,7 @@ def train(args):
 
 
 def launch():
-    import argparse
-    parser = argparse.ArgumentParser()
+    args = Args()
     args = parser.parse_args()
     args.run_name = 'diffusion_model'
     args.num_classes = 10
