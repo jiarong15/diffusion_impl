@@ -4,5 +4,5 @@
 Mathematical source for diffusion models: https://lilianweng.github.io/posts/2021-07-11-diffusion-models/
 
 Download nvidia driver for GPU accelerated modelling: 
-    1) https://heads0rtai1s.github.io/2021/02/25/gpu-setup-r-python-ubuntu/
-    2) https://forums.developer.nvidia.com/t/installing-cuda-on-ubuntu-22-04-rxt4080-laptop/292899
+* https://heads0rtai1s.github.io/2021/02/25/gpu-setup-r-python-ubuntu/
+* https://forums.developer.nvidia.com/t/installing-cuda-on-ubuntu-22-04-rxt4080-laptop/292899
