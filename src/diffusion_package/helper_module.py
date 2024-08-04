@@ -143,6 +143,8 @@ class SelfAttention(nn.Module):
 
 
     def forward(self, x):
+        orig_x_width = x.shape[-2]
+        orig_x_height = x.shape[-1]
 
         ## We first change it such that IF an epoch of data trained 
         ## follows this dimensions [5, 5, 64, 64] -> 5 images of 5 channels
@@ -153,7 +155,7 @@ class SelfAttention(nn.Module):
         ## where 5 * 64 * 64 / (16^2) assuming self.size is 16.
         ## Finally we swap the y (2nd) and z (3rd) axes. This results in
         ## the final output [80, 256, 5].
-        x = x.view(-1, self.channels, self.size * self.size).swapaxes(1,2)
+        x = x.reshape(-1, self.channels, self.size * self.size).swapaxes(1,2)
 
         ## We normalize over the 256 x 5 dimension
         ## output dimension remains the same at [80, 256, 5] 
@@ -174,8 +176,8 @@ class SelfAttention(nn.Module):
         attention_value = self.ff_self(attention_value) + attention_value
 
         ## We output in the desired up or down sampled size
-        ## in the dimension as follows with the example above: [80, 5, 16, 16]
-        return attention_value.swapaxes(2, 1).view(-1, self.channels, self.size, self.size)
+        ## in the dimension that follows the original image shape: [5, 5, 64, 64]
+        return attention_value.swapaxes(2, 1).reshape(-1, self.channels, orig_x_width, orig_x_height)
     
 
 

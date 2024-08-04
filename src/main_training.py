@@ -20,7 +20,7 @@ def train(args):
     ## Dataloader for input image data for training
     dataloader = get_data_loader(args.batch_size, args.is_data_loader_shuffle)
 
-    optimizer = optim.adamw(model.parameters(), lr=args.lr)
+    optimizer = optim.AdamW(model.parameters(), lr=args.lr)
 
     ## Utilize mean square error as the loss function
     mse = nn.MSELoss()
@@ -53,7 +53,7 @@ def train(args):
             ## 75 steps of gaussian noise added from the original image at x(0).
             x_t, noise = diffusion.noise_images(images, t)
 
-            if np.random().random() < 0.1:
+            if np.random.random() < 0.1:
                 labels = None
 
             ## Run the ML model (UNet) and get the predicted noise
