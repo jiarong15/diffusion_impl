@@ -2,6 +2,48 @@ import torch.nn as nn
 from torch.nn import functional as F
 import torch
 
+class EMA:
+    def __init__(self, beta):
+        self.beta = beta
+        self.step = 0
+
+    ## Iterate each param data chronologically and
+    ## setting them to the new ema model after ema smoothing
+    def update_model_average(self, ema_model, model):
+        for curr_param, ema_param in zip(model.parameters(), ema_model.parameters()):
+            old_weight, new_weight = ema_param.data, curr_param.data
+            ema_param.data = self.update_average(old_weight, new_weight)
+            
+    ## We have a apply the smoothing where the EMA model
+    ## parameters will be updated by the moving average
+    ## of the old and new weights.
+    def update_average(self, old_weight, new_weight):
+        return old_weight * self.beta + (1 - self.beta) * new_weight
+    
+
+    ## Set the ema model parameters to  
+    ## the non ema model parameters
+    def reset_parameters(self, ema_model, model):
+        ema_model.load_state_dict(model.state_dict())
+
+
+    ## At the start, even as we train the non ema model, 
+    ## we just allow the ema model take copy the learnt weights
+    ## from the non ema model. We don't want to over average early
+    ## as this overemphasizes the the early stage weights.
+    ## For simplicity, we start the averaging after 2000 steps
+    ## of non ema model training (assumes that our data and 
+    ## no. of epochs will exceed and best be more 2x more than 2000)
+    def step_ema(self, ema_model, model, step_start_ema=2000):
+        if self.step < step_start_ema:
+            self.reset_parameters(ema_model, model)
+            self.step += 1
+            return
+        self.update_model_average(ema_model, model)
+        self.step += 1
+
+
+
 class DoubleConv(nn.Module):
     '''
     Used in initial convolution of images as well as 

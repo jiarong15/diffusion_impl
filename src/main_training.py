@@ -1,12 +1,14 @@
 import torch
 from torch import optim
 from tqdm import tqdm
+import copy
 import torch.nn as nn
 import numpy as np
 
 from diffusion_package.unet_model import UNet
 from diffusion_package.diffusion import Diffusion
 from diffusion_package.utils import get_data_loader
+from diffusion_package.helper_module import EMA
 
 class Args:
     pass
@@ -27,6 +29,9 @@ def train(args):
 
     ## Load the Diffusion class
     diffusion = Diffusion(img_size=args.image_size, device=device)
+
+    ema = EMA(beta=0.995)
+    ema_model = copy.deepcopy(model).eval().requires_grad_(False)
 
     for epoch in range(args.epochs):
         progress_bar = tqdm(dataloader)
@@ -53,11 +58,14 @@ def train(args):
             ## 75 steps of gaussian noise added from the original image at x(0).
             x_t, noise = diffusion.noise_images(images, t)
 
-            if np.random.random() < 0.1:
+            is_uncond_sampli_prob = np.random.random() < 0.1
+            if is_uncond_sampli_prob:
                 labels = None
 
             ## Run the ML model (UNet) and get the predicted noise
-            ## Algorithm 1 of the paper
+            ## Algorithm 1 of the paper and depending on uncond_sampli_prob,
+            ## We train the model with labels and without labels at 
+            ## 90% and 10% of the time respectively.
             predicted_noise = model(x_t, t, labels)
 
             ## Calculate the mean squared error of
@@ -79,17 +87,23 @@ def train(args):
             ## to update the parameters
             optimizer.step()
 
+            ## Update ema model params to the model params
+            ## appropriately, either smoothed or just copying
+            ## the parameters early on
+            ema.step(ema_model, model)
+
         ## At each epoch, as the UNet model is being trained,
         ## we run the algorithm described in the paper to see how close
         ## are the images generated from a random gaussian to the original
         ## image. The images created should get better as the model learns.
+        ## Can add a helper function to save these sampled images.
         sampled_images = diffusion.sample(model, all_labels_in_this_epoch, n=all_images_in_this_epoch.shape[0])
+        ema_sampled_images = diffusion.sample(ema_model, all_labels_in_this_epoch, n=all_images_in_this_epoch.shape[0])
 
 
 
 def launch():
     args = Args()
-    args = parser.parse_args()
     args.run_name = 'diffusion_model'
     args.num_classes = 10
     args.epochs = 500
