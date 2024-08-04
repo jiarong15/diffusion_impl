@@ -4,8 +4,9 @@ from tqdm import tqdm
 import torch.nn as nn
 import numpy as np
 
-from .unet_model import UNet
-from .diffusion import Diffusion
+from diffusion_package.unet_model import UNet
+from diffusion_package.diffusion import Diffusion
+from diffusion_package.utils import get_data_loader
 
 
 def train(args):
@@ -15,7 +16,7 @@ def train(args):
     model = UNet(num_classes=args.num_classes).to(device)
 
     ## Dataloader for input image data for training
-    dataloader = get_data(args)
+    dataloader = get_data_loader(args.batch_size, args.is_data_loader_shuffle)
 
     optimizer = optim.adamw(model.parameters(), lr=args.lr)
 
@@ -24,9 +25,6 @@ def train(args):
 
     ## Load the Diffusion class
     diffusion = Diffusion(img_size=args.image_size, device=device)
-
-    l = len(dataloader)
-
 
     for epoch in range(args.epochs):
         progress_bar = tqdm(dataloader)
@@ -85,3 +83,21 @@ def train(args):
         ## image. The images created should get better as the model learns.
         sampled_images = diffusion.sample(model, all_labels_in_this_epoch, n=all_images_in_this_epoch.shape[0])
 
+
+
+def launch():
+    import argparse
+    parser = argparse.ArgumentParser()
+    args = parser.parse_args()
+    args.run_name = 'diffusion_model'
+    args.num_classes = 10
+    args.epochs = 500
+    args.batch_size = 12
+    args.is_data_loader_shuffle = True
+    args.image_size = 32
+    args.device = 'cuda'
+    args.lr = 3e-4
+    train(args)
+
+if __name__ == '__main__':
+    launch()

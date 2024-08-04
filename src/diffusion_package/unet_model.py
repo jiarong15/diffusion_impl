@@ -2,7 +2,6 @@ from .helper_module import DoubleConv, Down, Up, SelfAttention
 import torch.nn as nn
 import torch
 
-
 ## Implementing one of the commonly used architectures in diffusion models
 class UNet(nn.Module):
     def __init__(self, c_in=3, c_out=3, num_classes=None, time_dim=256, device='cuda'):

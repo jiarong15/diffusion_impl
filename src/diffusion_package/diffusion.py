@@ -63,7 +63,7 @@ class Diffusion:
         '''
         return torch.randint(low=1, high=self.noise_steps, size=(n,))
 
-    def sample(self, model, labels, n, cfg_scale=3):
+    def sample(self, model, labels, n, cfg_scale=8):
 
         ## Used to switch off behaviours in layers/parts
         ## of the ML model even as we inference it in the loop
@@ -96,7 +96,8 @@ class Diffusion:
 
                 ## We then perform linear interpolation to move towards
                 ## the conditional sample over the unconditional sample
-                ## as following the CFG formula
+                ## as following the CFG formula. Also a usual CFG scale
+                ## of 7.5 - 10 is used. I chose 8
                 predicted_noise = torch.lerp(unconditioned_predicted_noise,
                                              predicted_noise,
                                              cfg_scale)
@@ -141,7 +142,6 @@ class Diffusion:
         ## Altering the images such that they are in the valid pixel range
         x = (x * 255).type(torch.uint8)
         return x
-
 
 
 
