@@ -2,6 +2,31 @@ from .helper_module import DoubleConv, Down, Up, SelfAttention
 import torch.nn as nn
 import torch
 
+class ModuleHelpers:
+
+    def initial_input_convolutions(channels_in, channels_out):
+        return DoubleConv(channels_in, channels_out)
+    
+    def down_sampling_with_attention(down_in_channels, down_out_channels, att_size):
+        return nn.Sequential(
+            Down(down_in_channels, down_out_channels),
+            SelfAttention(down_out_channels, att_size)
+        )
+    
+    def up_sampling_with_attention(up_in_channels, up_out_channels, att_size):
+        return nn.Sequential(
+            Up(up_in_channels, up_out_channels),
+            SelfAttention(up_out_channels, att_size)
+        )
+    
+    def middle_blocks(in_channel, middle_channel, out_channel):
+        return nn.Sequential(
+            DoubleConv(in_channel, middle_channel),
+            DoubleConv(middle_channel, middle_channel),
+            DoubleConv(middle_channel, out_channel)
+        )
+
+
 ## Implementing one of the commonly used architectures in diffusion models
 class UNet(nn.Module):
     def __init__(self, c_in=3, c_out=3, num_classes=None, time_dim=256, device='cuda'):
@@ -21,7 +46,8 @@ class UNet(nn.Module):
 
         ## Bottle neck layer: Convolutional layers
 
-        self.inc = DoubleConv(c_in, 64)
+        self.inc = ModuleHelpers.initial_input_convolutions(c_in, 64)
+
         self.down1 = Down(64, 128)
         self.sa1 = SelfAttention(128, 32)
 
