@@ -10,8 +10,6 @@ from diffusion_package.diffusion import Diffusion
 from diffusion_package.utils import get_data_loader
 from diffusion_package.helper_module import EMA
 
-class Args:
-    pass
 
 def train(args):
     device = args.device
@@ -61,6 +59,13 @@ def train(args):
             is_uncond_sampli_prob = np.random.random() < 0.1
             if is_uncond_sampli_prob:
                 labels = None
+            
+            ## Prevent gradient accumulation by clearing
+            ## all the gradient computation the optimizer is tracking.
+            ## Gradient is tracked throughout a network 
+            ## because of backprop and thus we need to clear it after 
+            ## each epoch is trained.
+            optimizer.zero_grad()
 
             ## Run the ML model (UNet) and get the predicted noise
             ## Algorithm 1 of the paper and depending on uncond_sampli_prob,
@@ -71,13 +76,6 @@ def train(args):
             ## Calculate the mean squared error of
             ## predicted noise and the actual noise as the loss value
             loss = mse(noise, predicted_noise)
-
-            ## Prevent gradient accumulation by clearing
-            ## all the gradient computation the optimizer is tracking.
-            ## Gradient is tracked throughout a network 
-            ## because of backprop and thus we need to clear it after 
-            ## each epoch is trained.
-            optimizer.zero_grad()
 
             ## Computes loss for every parameter in the network.
             loss.backward()
@@ -103,11 +101,34 @@ def train(args):
 
 
 def launch():
-    args = Args()
-    args.run_name = 'diffusion_model'
-    args.num_classes = 10
-    args.epochs = 500
-    args.batch_size = 12
+
+    import argparse
+    parser = argparse.ArgumentParser()
+
+    def checker():
+        return
+
+    parser.add_argument("-run_name", required=True)
+    parser.add_argument("-num_classes", required=True)
+    parser.add_argument("-epochs", required=True)
+    parser.add_argument("-batch_size", required=True)
+    parser.add_argument("-lr", required=True)
+    parser.add_argument("-num_classes", required=True)
+    args = parser.parse_args()
+
+    '''
+    Input the following to terminal to invoke a run:
+    python3 src/main_training.py -run_name <value> -num_classes <value>
+    
+    '''
+
+
+    ## Uncomment for jupyter run
+    # args.run_name = 'diffusion_model'
+    # args.num_classes = 10
+    # args.epochs = 500
+    # args.batch_size = 12
+
     args.is_data_loader_shuffle = True
     args.image_size = 32
     args.device = 'cuda'

@@ -48,7 +48,7 @@ class ControlNet(nn.Module):
 
         ## We set strict = False because we will not enforce 
         ## that the keys of the original model must match this 
-        ## control net model since we are omitting the Downsampling blocks
+        ## control net model since we are omitting the Downsampling blocks !!!
         self.copy_control_net.load_state_dict(torch.load(model_ckpt,
                                                      map_location=device),
                                                      strict=False)
