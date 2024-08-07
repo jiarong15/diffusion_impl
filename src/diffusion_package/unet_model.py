@@ -1,31 +1,10 @@
 from .helper_module import DoubleConv, Down, Up, SelfAttention
 import torch.nn as nn
+import os
 import torch
 
-class ModuleHelpers:
+MODEL_CHECKPOINT_PATH = '../model_storage/trained_unet_model.pt'
 
-    def initial_input_convolutions(channels_in, channels_out):
-        return DoubleConv(channels_in, channels_out)
-    
-    def down_sampling_with_attention(down_in_channels, down_out_channels, att_size):
-        return nn.Sequential(
-            Down(down_in_channels, down_out_channels),
-            SelfAttention(down_out_channels, att_size)
-        )
-    
-    def up_sampling_with_attention(up_in_channels, up_out_channels, att_size):
-        return nn.Sequential(
-            Up(up_in_channels, up_out_channels),
-            SelfAttention(up_out_channels, att_size)
-        )
-    
-    def middle_blocks(in_channel, middle_channel, out_channel):
-        return nn.Sequential(
-            DoubleConv(in_channel, middle_channel),
-            DoubleConv(middle_channel, middle_channel),
-            DoubleConv(middle_channel, out_channel)
-        )
-    
 
 def make_zero_module(module):
     '''
@@ -39,6 +18,18 @@ def make_zero_module(module):
     return module
 
 class ParentUNet:
+    def __init__(self, time_dim=256, num_classes=None, device='cuda'):
+        self.device = device
+        self.time_dim = time_dim
+
+        if num_classes is not None:
+            ## We try to condition on the classes that we may know of 
+            ## to help improve our model as part of Classifier Free Guidance
+            ## The number of embeddings will be the image classes and
+            ## it has to be the same dimension as our time tensors
+            ## as we are conditioning the noise learnt on both to improve
+            ## training accuracy.
+            self.label_embedding = nn.Embedding(num_classes, time_dim)
 
     def pos_encoding(self, t, channels):
         '''
@@ -60,16 +51,15 @@ class ParentUNet:
         return pos_enc
 
 
-
 ## Implementing one of the commonly used architectures in diffusion models
 class UNet(nn.Module, ParentUNet):
-    def __init__(self, c_in=3, c_out=3, num_classes=None,
-                 time_dim=256, device='cuda', use_up_blocks=True):
+    def __init__(self, c_in=3, c_out=3,
+                 num_classes=None, use_up_blocks=True):
         ## c_in and c_out denotes the channels of the image
         ## In this case, both take the value 3.
         super().__init__()
-        self.device = device
-        self.time_dim = time_dim
+        ParentUNet.__init__(self, num_classes=num_classes)
+
         self.use_up_blocks = use_up_blocks
 
         ## Self attention arguments:
@@ -104,15 +94,6 @@ class UNet(nn.Module, ParentUNet):
             self.sa6 = SelfAttention(64, 64)
 
             self.outc = nn.Conv2d(64, c_out, kernel_size=1)
-
-        if num_classes is not None:
-            ## We try to condition on the classes that we may know of 
-            ## to help improve our model as part of Classifier Free Guidance
-            ## The number of embeddings will be the image classes and
-            ## it has to be the same dimension as our time tensors
-            ## as we are conditioning the noise learnt on both to improve
-            ## training accuracy.
-            self.label_embedding = nn.Embedding(num_classes, time_dim)
 
 
     def forward(self, x, t, y):
@@ -166,9 +147,6 @@ class UNet(nn.Module, ParentUNet):
         return output
 
 
-
-
-
 class ControlNet(nn.Module, ParentUNet):
 
     ## Copy weight of trained UNet model
@@ -177,79 +155,90 @@ class ControlNet(nn.Module, ParentUNet):
 
     ## Down and mid blocks will be made with 0 parameters throughout all layers
 
-    def __init__(self, num_classes=None, model_locked=True, model_ckpt=None, device='cuda'):
+    def __init__(self, hint_c_in=3, num_classes=None, 
+                 model_locked=True):
+        
         super().__init__()
+        ParentUNet.__init__(self, num_classes=num_classes)
+    
+        ## Load and instance of the UNet model
+        ## We then load the previously saved checkpoint 
+        ## instance.
+        self.trained_unet = UNet(num_classes=num_classes).to(self.device)
 
-        ## Load the trained UNet's parameters
-        ## Should already be trained. We can load the model 
-        ## checkpoint into this model
-        self.trained_unet = UNet(num_classes=num_classes).to(device)
-
-        if model_ckpt is not None:
-            self.trained_unet.load_state_dict(torch.load(model_ckpt,
-                                                        map_location=device),
+        if os.path.exists(MODEL_CHECKPOINT_PATH):
+            self.trained_unet.load_state_dict(torch.load(MODEL_CHECKPOINT_PATH,
+                                                        map_location=self.device),
                                                         strict=True)
         
-        self.should_model_be_locked = model_locked
+        self.model_locked = model_locked
 
         ## Need to somehow indicate that when loading the
         ## model, we want to exclude the Up sampling Modules in
         ## this model.
         self.copy_control_net = UNet(num_classes=num_classes,
-                                     use_up_blocks=False).to(device)
+                                     use_up_blocks=False).to(self.device)
 
         ## We set strict = False because we will not enforce 
         ## that the keys of the original model must match this 
         ## control net model since we are omitting the Downsampling blocks !!!
-        if model_ckpt is not None:
-            self.copy_control_net.load_state_dict(torch.load(model_ckpt,
-                                                        map_location=device),
+        if os.path.exists(MODEL_CHECKPOINT_PATH):
+            self.copy_control_net.load_state_dict(torch.load(MODEL_CHECKPOINT_PATH,
+                                                        map_location=self.device),
                                                         strict=False)
             
 
         ## Hint block for extra features to be added to training,
-        ## where for instance it could be canary edges, hough transforms
+        ## where for instance it could be canny edges, hough transforms
         ## and so on. Dimensions should match those of the first conv layer
 
         self.copy_control_net_hint_block = nn.Sequential(
-            nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=(1,1)),
+            nn.Conv2d(hint_c_in, 64, kernel_size=3, padding=(1,1)),
             nn.SiLU(),
-            nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=(1,1)),
+            nn.Conv2d(64, 128, kernel_size=3, padding=(1,1)),
             nn.SiLU(),
-            nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=(1,1)),
+            nn.Conv2d(128, 64, kernel_size=3, padding=(1,1)),
             nn.SiLU(),
-            make_zero_module(nn.Conv2d(in_channels, mid_channels, kernel_size=1, padding=0))
+            make_zero_module(nn.Conv2d(64, 64, kernel_size=1, padding=0))
         )
 
 
-        self.copy_control_net_down_block_convs = nn.Sequential(
-            ## Need to scale to how many down block channels there are
-            make_zero_module(nn.Conv2d(in_channels, mid_channels, kernel_size=1, padding=0))
-        )
-
+        self.copy_control_net_down_block_convs = nn.ModuleList([
+            make_zero_module(nn.Conv2d(64, 128, kernel_size=1, padding=0)),
+            make_zero_module(nn.Conv2d(128, 256, kernel_size=1, padding=0)),
+            make_zero_module(nn.Conv2d(256, 256, kernel_size=1, padding=0))
+        ])
 
         self.copy_control_net_mid_block_convs = nn.Sequential(
             ## Need to scale to how many down block channels there are
-            make_zero_module(nn.Conv2d(in_channels, mid_channels, kernel_size=1, padding=0))
+            make_zero_module(nn.Conv2d(256, 512, kernel_size=1, padding=0)),
+            make_zero_module(nn.Conv2d(512, 512, kernel_size=1, padding=0)),
+            make_zero_module(nn.Conv2d(512, 256, kernel_size=1, padding=0))
         )
 
     
-    def add_params(self):
+    def get_control_net_params(self):
         params = list(self.copy_control_net.parameters())
         params += list(self.copy_control_net_hint_block.parameters())
         params += list(self.copy_control_net_down_block_convs.parameters())
         params += list(self.copy_control_net_mid_block_convs.parameters())
 
 
-        if not self.should_model_be_locked:
+        if not self.model_locked:
             ## Add the trained Upsampling output blocks
             ## if needed
-            params += list(self.trained_unet.parameters())
-            params += list(self.trained_unet.parameters())
-            params += list(self.trained_unet.parameters())
+            params += list(self.trained_unet.up1.parameters())
+            params += list(self.trained_unet.sa4.parameters())
+
+            params += list(self.trained_unet.up2.parameters())
+            params += list(self.trained_unet.sa5.parameters())
+
+            params += list(self.trained_unet.up3.parameters())
+            params += list(self.trained_unet.sa6.parameters())
+
+            params += list(self.trained_unet.outc.parameters())
         return params
     
-
     
     def forward(self, x, t, y, hint):
         '''
@@ -292,15 +281,16 @@ class ControlNet(nn.Module, ParentUNet):
 
         control_copy_down_outs = []
 
-        control_copy_down_outs.append(self.copy_control_net_down_block_convs(x1))
+
+        control_copy_down_outs.append(self.copy_control_net_down_block_convs[0](x1))
         x2 = self.down1(x1, t) # Down
         x2 = self.sa1(x2) # SelfAttention
 
-        control_copy_down_outs.append(self.copy_control_net_down_block_convs(x2))
+        control_copy_down_outs.append(self.copy_control_net_down_block_convs[1](x2))
         x3 = self.down2(x2, t) # Down
         x3 = self.sa2(x3) # SelfAttention
 
-        control_copy_down_outs.append(self.copy_control_net_down_block_convs(x3))
+        control_copy_down_outs.append(self.copy_control_net_down_block_convs[2](x3))
         x4 = self.down3(x3, t) # Down
         x4 = self.sa3(x4) # SelfAttention
 
@@ -308,15 +298,15 @@ class ControlNet(nn.Module, ParentUNet):
 
         x4 = self.bot1(x4) # DoubleConv
         train_unet_out = self.trained_unet.bot1(train_unet_out)
-        train_unet_out += self.copy_control_net_mid_block_convs(x4)
+        train_unet_out += self.copy_control_net_mid_block_convs[0](x4)
 
         x4 = self.bot2(x4) # DoubleConv
         train_unet_out = self.trained_unet.bot2(train_unet_out)
-        train_unet_out += self.copy_control_net_mid_block_convs(x4)
+        train_unet_out += self.copy_control_net_mid_block_convs[1](x4)
 
         x4 = self.bot3(x4) # DoubleConv
         train_unet_out = self.trained_unet.bot3(train_unet_out)
-        train_unet_out += self.copy_control_net_mid_block_convs(x4)
+        train_unet_out += self.copy_control_net_mid_block_convs[2](x4)
 
         
 
@@ -347,9 +337,3 @@ class ControlNet(nn.Module, ParentUNet):
 
         output = self.outc(train_unet_out) # Conv2D for to match final output image dimension
         return output
-
-
-
-
-
-

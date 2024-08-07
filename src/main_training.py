@@ -5,22 +5,32 @@ import copy
 import torch.nn as nn
 import numpy as np
 
-from diffusion_package.unet_model import UNet
+from diffusion_package.unet_model import UNet, ControlNet
 from diffusion_package.diffusion import Diffusion
 from diffusion_package.utils import get_data_loader
 from diffusion_package.helper_module import EMA
 
+class Args:
+    pass
 
 def train(args):
     device = args.device
 
-    ## Load the UNet model
-    model = UNet(num_classes=args.num_classes).to(device)
+    ## Load the UNet model or the ControlNet model
+    if args.use_control_net == 1:
+        model = ControlNet(num_classes=args.num_classes).to(device)
+    else:
+        model = UNet(num_classes=args.num_classes).to(device)
 
     ## Dataloader for input image data for training
-    dataloader = get_data_loader(args.batch_size, args.is_data_loader_shuffle)
+    dataloader = get_data_loader(args.batch_size,
+                                 args.is_data_loader_shuffle)
 
-    optimizer = optim.AdamW(model.parameters(), lr=args.lr)
+    if args.use_control_net == 1:
+        optimizer = optim.AdamW(model.get_control_net_params(), lr=args.lr)
+    else:
+        optimizer = optim.AdamW(model.parameters(), lr=args.lr)
+
 
     ## Utilize mean square error as the loss function
     mse = nn.MSELoss()
@@ -37,12 +47,13 @@ def train(args):
         all_images_in_this_epoch = torch.tensor(())
         all_labels_in_this_epoch = torch.tensor(())
 
-        for i, (images, labels) in enumerate(progress_bar):
+        for i, (images, labels, edges) in enumerate(progress_bar):
             all_images_in_this_epoch = torch.cat((all_images_in_this_epoch, images), 0)
             all_labels_in_this_epoch = torch.cat((all_labels_in_this_epoch, labels), 0)
 
             images = images.to(device)
             labels = labels.to(device)
+            edges = edges.to(device)
 
             ## We build a timestep tensor of size as huge as the number
             ## of image training data that we have. This time t is a 
@@ -71,7 +82,10 @@ def train(args):
             ## Algorithm 1 of the paper and depending on uncond_sampli_prob,
             ## We train the model with labels and without labels at 
             ## 90% and 10% of the time respectively.
-            predicted_noise = model(x_t, t, labels)
+            if args.use_control_net == 1:
+                predicted_noise = model(x_t, t, labels, edges)
+            else:
+                predicted_noise = model(x_t, t, labels)
 
             ## Calculate the mean squared error of
             ## predicted noise and the actual noise as the loss value
@@ -88,47 +102,50 @@ def train(args):
             ## Update ema model params to the model params
             ## appropriately, either smoothed or just copying
             ## the parameters early on
-            ema.step(ema_model, model)
+            ema.step_ema(ema_model, model)
 
         ## At each epoch, as the UNet model is being trained,
         ## we run the algorithm described in the paper to see how close
         ## are the images generated from a random gaussian to the original
         ## image. The images created should get better as the model learns.
         ## Can add a helper function to save these sampled images.
-        sampled_images = diffusion.sample(model, all_labels_in_this_epoch, n=all_images_in_this_epoch.shape[0])
-        ema_sampled_images = diffusion.sample(ema_model, all_labels_in_this_epoch, n=all_images_in_this_epoch.shape[0])
+        sampled_images = diffusion.sample(model, all_labels_in_this_epoch, edges,
+                                          all_images_in_this_epoch.shape[0],
+                                          args.use_control_net)
+        ema_sampled_images = diffusion.sample(ema_model, all_labels_in_this_epoch, edges,
+                                              all_images_in_this_epoch.shape[0],
+                                              args.use_control_net)
 
 
 
 def launch():
-
+    '''
     import argparse
     parser = argparse.ArgumentParser()
-
-    def checker():
-        return
-
     parser.add_argument("-run_name", required=True)
     parser.add_argument("-num_classes", required=True)
     parser.add_argument("-epochs", required=True)
     parser.add_argument("-batch_size", required=True)
     parser.add_argument("-lr", required=True)
     parser.add_argument("-num_classes", required=True)
+
+    ## 0 for no usage of control net and 1 otherwise
+    parser.add_argument("-use_control_net", required=True)
     args = parser.parse_args()
 
-    '''
     Input the following to terminal to invoke a run:
     python3 src/main_training.py -run_name <value> -num_classes <value>
     
     '''
 
+    args = Args()
 
-    ## Uncomment for jupyter run
-    # args.run_name = 'diffusion_model'
-    # args.num_classes = 10
-    # args.epochs = 500
-    # args.batch_size = 12
-
+    # Uncomment for jupyter run
+    args.run_name = 'diffusion_model'
+    args.num_classes = 10
+    args.epochs = 500
+    args.batch_size = 12
+    args.use_control_net = 0
     args.is_data_loader_shuffle = True
     args.image_size = 32
     args.device = 'cuda'

@@ -63,7 +63,7 @@ class Diffusion:
         '''
         return torch.randint(low=1, high=self.noise_steps, size=(n,))
 
-    def sample(self, model, labels, n, cfg_scale=8):
+    def sample(self, model, labels, edges, n, use_control_net, cfg_scale=8):
 
         ## Used to switch off behaviours in layers/parts
         ## of the ML model even as we inference it in the loop
@@ -87,12 +87,20 @@ class Diffusion:
                 ## timestep i for n times below as used in self.alpha[t]
                 ## as well as for indicating model prediction at a particular timestep.
                 t = (torch.ones(n) * i).long().to(self.device)
-                predicted_noise = model(x, t, labels)
+
+                if use_control_net == 1:
+                    predicted_noise = model(x, t, labels, edges)
+                else:
+                    predicted_noise = model(x, t, labels)
 
                 ## We don't want to include the labels, so
                 ## we are just conditioning on the time
                 ## and leaving out the labels
-                unconditioned_predicted_noise = model(x, t, None)
+                if use_control_net == 1:
+                    unconditioned_predicted_noise = model(x, t, None, edges)
+                else:
+                    unconditioned_predicted_noise = model(x, t, None)
+                    
 
                 ## We then perform linear interpolation to move towards
                 ## the conditional sample over the unconditional sample
