@@ -10,6 +10,8 @@ from diffusion_package.diffusion import Diffusion
 from diffusion_package.utils import get_data_loader
 from diffusion_package.helper_module import EMA
 
+MODEL_CHECKPOINT_PATH = './model_storage/trained_unet_model.pt'
+
 class Args:
     pass
 
@@ -116,6 +118,7 @@ def train(args):
                                               all_images_in_this_epoch.shape[0],
                                               args.use_control_net)
 
+    torch.save(model.state_dict(), MODEL_CHECKPOINT_PATH)
 
 
 def launch():
