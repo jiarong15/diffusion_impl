@@ -54,11 +54,11 @@ class ParentUNet:
 ## Implementing one of the commonly used architectures in diffusion models
 class UNet(nn.Module, ParentUNet):
     def __init__(self, c_in=3, c_out=3,
-                 num_classes=None, use_up_blocks=True):
+                 num_classes=None, use_up_blocks=True, device='cuda'):
         ## c_in and c_out denotes the channels of the image
         ## In this case, both take the value 3.
         super().__init__()
-        ParentUNet.__init__(self, num_classes=num_classes)
+        ParentUNet.__init__(self, num_classes=num_classes, device=device)
 
         self.use_up_blocks = use_up_blocks
 
@@ -156,10 +156,10 @@ class ControlNet(nn.Module, ParentUNet):
     ## Down and mid blocks will be made with 0 parameters throughout all layers
 
     def __init__(self, hint_c_in=3, num_classes=None, 
-                 model_locked=True):
+                 model_locked=True, device='cuda'):
         
         super().__init__()
-        ParentUNet.__init__(self, num_classes=num_classes)
+        ParentUNet.__init__(self, num_classes=num_classes, device=device)
     
         ## Load and instance of the UNet model
         ## We then load the previously saved checkpoint 
@@ -204,17 +204,17 @@ class ControlNet(nn.Module, ParentUNet):
 
 
         self.copy_control_net_down_block_convs = nn.ModuleList([
-            make_zero_module(nn.Conv2d(64, 128, kernel_size=1, padding=0)),
-            make_zero_module(nn.Conv2d(128, 256, kernel_size=1, padding=0)),
+            make_zero_module(nn.Conv2d(64, 64, kernel_size=1, padding=0)),
+            make_zero_module(nn.Conv2d(128, 128, kernel_size=1, padding=0)),
             make_zero_module(nn.Conv2d(256, 256, kernel_size=1, padding=0))
         ])
 
-        self.copy_control_net_mid_block_convs = nn.Sequential(
+        self.copy_control_net_mid_block_convs = nn.ModuleList([
             ## Need to scale to how many down block channels there are
-            make_zero_module(nn.Conv2d(256, 512, kernel_size=1, padding=0)),
             make_zero_module(nn.Conv2d(512, 512, kernel_size=1, padding=0)),
-            make_zero_module(nn.Conv2d(512, 256, kernel_size=1, padding=0))
-        )
+            make_zero_module(nn.Conv2d(512, 512, kernel_size=1, padding=0)),
+            make_zero_module(nn.Conv2d(256, 256, kernel_size=1, padding=0))
+        ])
 
     
     def get_control_net_params(self):
@@ -276,35 +276,35 @@ class ControlNet(nn.Module, ParentUNet):
 
         
         hint_out = self.copy_control_net_hint_block(hint)
-        x1 = self.inc(x) # DoubleConv
+        x1 = self.copy_control_net.inc(x) # DoubleConv
         x1 += hint_out # Add the hint block for further downblock processing
 
         control_copy_down_outs = []
 
 
         control_copy_down_outs.append(self.copy_control_net_down_block_convs[0](x1))
-        x2 = self.down1(x1, t) # Down
-        x2 = self.sa1(x2) # SelfAttention
+        x2 = self.copy_control_net.down1(x1, t) # Down
+        x2 = self.copy_control_net.sa1(x2) # SelfAttention
 
         control_copy_down_outs.append(self.copy_control_net_down_block_convs[1](x2))
-        x3 = self.down2(x2, t) # Down
-        x3 = self.sa2(x3) # SelfAttention
+        x3 = self.copy_control_net.down2(x2, t) # Down
+        x3 = self.copy_control_net.sa2(x3) # SelfAttention
 
         control_copy_down_outs.append(self.copy_control_net_down_block_convs[2](x3))
-        x4 = self.down3(x3, t) # Down
-        x4 = self.sa3(x4) # SelfAttention
+        x4 = self.copy_control_net.down3(x3, t) # Down
+        x4 = self.copy_control_net.sa3(x4) # SelfAttention
 
 
 
-        x4 = self.bot1(x4) # DoubleConv
+        x4 = self.copy_control_net.bot1(x4) # DoubleConv
         train_unet_out = self.trained_unet.bot1(train_unet_out)
         train_unet_out += self.copy_control_net_mid_block_convs[0](x4)
 
-        x4 = self.bot2(x4) # DoubleConv
+        x4 = self.copy_control_net.bot2(x4) # DoubleConv
         train_unet_out = self.trained_unet.bot2(train_unet_out)
         train_unet_out += self.copy_control_net_mid_block_convs[1](x4)
 
-        x4 = self.bot3(x4) # DoubleConv
+        x4 = self.copy_control_net.bot3(x4) # DoubleConv
         train_unet_out = self.trained_unet.bot3(train_unet_out)
         train_unet_out += self.copy_control_net_mid_block_convs[2](x4)
 
@@ -335,5 +335,5 @@ class ControlNet(nn.Module, ParentUNet):
                                                trained_unet_t)
         train_unet_out = self.trained_unet.sa6(train_unet_out)
 
-        output = self.outc(train_unet_out) # Conv2D for to match final output image dimension
+        output = self.trained_unet.outc(train_unet_out) # Conv2D for to match final output image dimension
         return output

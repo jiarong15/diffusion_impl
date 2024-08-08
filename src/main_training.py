@@ -20,9 +20,11 @@ def train(args):
 
     ## Load the UNet model or the ControlNet model
     if args.use_control_net == 1:
-        model = ControlNet(num_classes=args.num_classes).to(device)
+        model = ControlNet(num_classes=args.num_classes,
+                           device=device).to(device)
     else:
-        model = UNet(num_classes=args.num_classes).to(device)
+        model = UNet(num_classes=args.num_classes,
+                     device=device).to(device)
 
     ## Dataloader for input image data for training
     dataloader = get_data_loader(args.batch_size,
@@ -48,10 +50,12 @@ def train(args):
 
         all_images_in_this_epoch = torch.tensor(())
         all_labels_in_this_epoch = torch.tensor(())
+        all_edges_in_this_epoch = torch.tensor(())
 
         for i, (images, labels, edges) in enumerate(progress_bar):
             all_images_in_this_epoch = torch.cat((all_images_in_this_epoch, images), 0)
             all_labels_in_this_epoch = torch.cat((all_labels_in_this_epoch, labels), 0)
+            all_edges_in_this_epoch = torch.cat((all_edges_in_this_epoch, edges), 0)
 
             images = images.to(device)
             labels = labels.to(device)
@@ -111,14 +115,26 @@ def train(args):
         ## are the images generated from a random gaussian to the original
         ## image. The images created should get better as the model learns.
         ## Can add a helper function to save these sampled images.
-        sampled_images = diffusion.sample(model, all_labels_in_this_epoch, edges,
+        ## Additionally, as labels ought to be categorical in nature, 
+        ## we explicitly cast labels to int64 to ensure that the type 
+        ## integrity is retained and will work when we run it though the
+        ## nn.Embedding later
+        sampled_images = diffusion.sample(model, all_labels_in_this_epoch.to(torch.int64),
+                                          all_edges_in_this_epoch,
                                           all_images_in_this_epoch.shape[0],
                                           args.use_control_net)
-        ema_sampled_images = diffusion.sample(ema_model, all_labels_in_this_epoch, edges,
+        ema_sampled_images = diffusion.sample(ema_model, all_labels_in_this_epoch.to(torch.int64),
+                                              all_edges_in_this_epoch,
                                               all_images_in_this_epoch.shape[0],
                                               args.use_control_net)
-
-    torch.save(model.state_dict(), MODEL_CHECKPOINT_PATH)
+    
+    ## Only save when we run the normal model
+    ## since part of the initialization in the 
+    ## controlnet model requires the strict
+    ## frozen state dicts mapping of the  
+    ## normal Unet model
+    if args.use_control_net != 1:
+        torch.save(model.state_dict(), MODEL_CHECKPOINT_PATH)
 
 
 def launch():
@@ -148,10 +164,10 @@ def launch():
     args.num_classes = 10
     args.epochs = 500
     args.batch_size = 12
-    args.use_control_net = 0
+    args.use_control_net = 1
     args.is_data_loader_shuffle = True
     args.image_size = 32
-    args.device = 'cuda'
+    args.device = None
     args.lr = 3e-4
     train(args)
 

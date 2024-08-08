@@ -3,6 +3,9 @@
 > Included the explanations for many of the variables, the use case of the different functions and how it relates back to the research paper in the link above.
 Mathematical source for diffusion models: https://lilianweng.github.io/posts/2021-07-11-diffusion-models/
 
+> ** The trained_unet_model.pt saved in model_storage dir is generated with
+only a test run of small epochs size and noise steps as a check. Please re-run the training proper with UNet first to get an updated model checkpoint that can be used!
+
 Download nvidia driver for GPU accelerated modelling: 
 * https://heads0rtai1s.github.io/2021/02/25/gpu-setup-r-python-ubuntu/
 * https://forums.developer.nvidia.com/t/installing-cuda-on-ubuntu-22-04-rxt4080-laptop/292899

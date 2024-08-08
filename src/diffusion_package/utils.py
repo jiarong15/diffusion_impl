@@ -28,7 +28,7 @@ def get_data_loader(batch_size, is_data_loader_shuffle):
     transform = transforms.Compose([transforms.ToTensor()])
     img_tensor = torch.stack(list(map(lambda PILimg: transform(PILimg), ds['train']['img'])))
     label_tensor = torch.LongTensor(ds['train']['label'])
-    edge_tensor = torch.stack(list(map(lambda PILimg: torch.tensor(get_canny_edges(PILimg)), ds['train']['img'])))
+    edge_tensor = torch.stack(list(map(lambda PILimg: torch.tensor(get_canny_edges(PILimg)).float(), ds['train']['img'])))
 
     my_dataset = TensorDataset(img_tensor, label_tensor, edge_tensor) # create your datset
     my_dataloader = DataLoader(my_dataset,
