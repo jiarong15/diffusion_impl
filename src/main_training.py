@@ -40,7 +40,9 @@ def train(args):
     mse = nn.MSELoss()
 
     ## Load the Diffusion class
-    diffusion = Diffusion(img_size=args.image_size, device=device)
+    diffusion = Diffusion(img_size=args.image_size,
+                          use_parameterization=args.use_parameterization,
+                          device=device)
 
     ema = EMA(beta=0.995)
     ema_model = copy.deepcopy(model).eval().requires_grad_(False)
@@ -161,6 +163,7 @@ def launch():
 
     # Uncomment for jupyter run
     args.run_name = 'diffusion_model'
+    args.use_parameterization = True
     args.num_classes = 10
     args.epochs = 500
     args.batch_size = 12

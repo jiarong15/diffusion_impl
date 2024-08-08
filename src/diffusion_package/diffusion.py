@@ -1,19 +1,18 @@
 from tqdm import tqdm
 import torch
+import numpy as np
 
 class Diffusion:
 
-    def __init__(self, noise_steps=1000, beta_start=1e-4, beta_end=0.02, img_size=64, device='cuda'):
+    def __init__(self, noise_steps=1000, use_parameterization=False, img_size=64, device='cuda'):
         self.noise_steps = noise_steps
-        self.beta_start = beta_start
-        self.beta_end = beta_end
         self.img_size = img_size
         self.device = device
 
         ## Beta is the values for noise variance parameter
         ## used at each time step. It influences the amount of noise
         ## introduced to the image data at some timestep t
-        self.beta = self.prepare_schedule().to(self.device)
+        self.beta = self.prepare_schedule(use_parameterization).to(self.device)
         self.alpha = 1. - self.beta
 
         ## Get the cumulative product of alphas from timestep 1 to timestep n.
@@ -22,14 +21,26 @@ class Diffusion:
         ## in the noise image function.
         self.alpha_hat = torch.cumprod(self.alpha, dim=0)
 
-
-    def prepare_schedule(self):
+    def prepare_schedule(self, use_parameterization):
         '''
         Create 1D tensor evenly space from start to end over
-        the number noise steps
+        the number noise steps depending on whether we want to use
+        parameterization of betas (enhancement)
         '''
-        return torch.linspace(self.beta_start, self.beta_end, self.noise_steps)
-    
+        def f_t(t):
+            s = 0.008
+            return np.cos((((t / 1000) + s) / (1 + s)) * (np.pi / 2)) ** 2
+        
+        def alpha_hat(t):
+            return f_t(t) / f_t(0)
+             
+        if use_parameterization:
+            t = torch.linspace(0, self.noise_steps, self.noise_steps)
+            return torch.clip(1 - (alpha_hat(t) / alpha_hat(t-1)), min=None, max=0.999)
+        
+        return torch.linspace(1e-4, 0.02, self.noise_steps)
+
+
 
     def noise_images(self, x, t):
         '''
