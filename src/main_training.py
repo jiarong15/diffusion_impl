@@ -140,25 +140,6 @@ def train(args):
 
 
 def launch():
-    '''
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-run_name", required=True)
-    parser.add_argument("-num_classes", required=True)
-    parser.add_argument("-epochs", required=True)
-    parser.add_argument("-batch_size", required=True)
-    parser.add_argument("-lr", required=True)
-    parser.add_argument("-num_classes", required=True)
-
-    ## 0 for no usage of control net and 1 otherwise
-    parser.add_argument("-use_control_net", required=True)
-    args = parser.parse_args()
-
-    Input the following to terminal to invoke a run:
-    python3 src/main_training.py -run_name <value> -num_classes <value>
-    
-    '''
-
     args = Args()
 
     # Uncomment for jupyter run

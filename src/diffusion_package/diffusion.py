@@ -50,13 +50,13 @@ class Diffusion:
         x(0) denotes the original image
         '''
 
-        ## After sampling alpha and beta at time step i, it becomes a 
+        ## After sampling alpha and beta at time step i, it becomes a
         ## 1D tensor. [:, None, None, None] changes the dimensions to
         ## this shape (n, 1, 1, 1)
         sqrt_alpha_hat = torch.sqrt(self.alpha_hat[t])[:, None, None, None]
         sqrt_one_minus_alpha_hat = torch.sqrt(1. - self.alpha_hat[t])[:, None, None, None]
 
-        ## Build a tensor of same tensor size as x sampled 
+        ## Build a tensor of same tensor size as x sampled
         ## from a gaussian of mean 0 and variance 1
         epsilon = torch.rand_like(x)
 
@@ -121,8 +121,8 @@ class Diffusion:
                                              predicted_noise,
                                              cfg_scale)
 
-                ## After sampling alpha, alpha_hat and beta at time step i, it 
-                ## becomes a 1D tensor.
+                ## After sampling alpha, alpha_hat and beta at 
+                ## time step i, it becomes a 1D tensor.
                 ## [:, None, None, None] changes the dimensions to
                 ## this shape (n, 1, 1, 1)
                 alpha = self.alpha[t][:, None, None, None]
