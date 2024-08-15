@@ -171,6 +171,36 @@ class DiT(nn.Module):
         x = self.final_layer(x, c)               # (N, T, patch_size ** 2 * out_channels)
         x = self.unpatchify(x)                   # (N, out_channels, H, W)
         return x
+    
+    def forward_decision(self, x, t, y, edges=None, cfg_scale=8):
+        """
+        Batches the unconditional forward pass for classifier-free guidance.
+        """
+        if self.dropout_prob == 0 and edges is not None:
+          return self.forward(x, t, y, edges)
+        elif self.dropout_prob == 0 and edges is None:
+          return self.forward(x, t, y)
+
+        half = x[: len(x) // 2]
+        combined = torch.cat([half, half], dim=0)
+        if edges is not None:
+          model_out = self.forward(combined, t, y, edges)
+        else:
+          model_out = self.forward(combined, t, y)
+
+        ## eps represent the noise prediction while rest
+        ## is the additional information that isn't needed for
+        ## the guidance step
+        eps, rest = model_out[:, :self.channel], model_out[:, self.channel:]
+        cond_eps, uncond_eps = torch.split(eps, len(eps) // 2, dim=0)
+
+        ## We then perform linear interpolation to move towards
+        ## the conditional sample over the unconditional sample
+        ## as following the CFG formula. Also a usual CFG scale
+        ## of 7.5 - 10 is used. I chose 8
+        half_eps = uncond_eps + cfg_scale * (cond_eps - uncond_eps)
+        eps = torch.cat([half_eps, half_eps], dim=0)
+        return torch.cat([eps, rest], dim=1)
 
 
 

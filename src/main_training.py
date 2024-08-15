@@ -8,6 +8,7 @@ import torch.nn as nn
 from diffusion_package.unet_model import UNet, ControlNet, ConvNextV2ForImageClassificationWithAttributes
 from diffusion_package.diffusion import Diffusion
 from diffusion_package.utils import get_data_loader
+from diffusion_package.DIT.DiT_model import DiT
 from diffusion_package.helper_module import EMA
 
 MODEL_CHECKPOINT_PATH = './model_storage/trained_unet_model.pt'

@@ -3,6 +3,10 @@ from attention import Attention
 from mlp import Mlp
 
 def modulate(x, shift, scale):
+    ## Create an additional dimension so that affine
+    ## transformations can be applied element wise.
+    ## if x: [15, 256, 1152], scale & shift: [15, 1152]
+    ## unsqueeze -> [15, 1, 1152]
     return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
 
 class DiTBlock(nn.Module):
