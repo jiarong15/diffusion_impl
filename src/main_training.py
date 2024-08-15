@@ -3,7 +3,7 @@ from torch import optim
 from tqdm import tqdm
 import copy
 import torch.nn as nn
-import numpy as np
+
 
 from diffusion_package.unet_model import UNet, ControlNet, ConvNextV2ForImageClassificationWithAttributes
 from diffusion_package.diffusion import Diffusion
