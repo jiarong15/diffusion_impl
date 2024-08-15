@@ -1,4 +1,6 @@
 from .helper_module import DoubleConv, Down, Up, SelfAttention, LabelEmbedder
+
+from transformers import ConvNextV2ForImageClassification
 import torch.nn as nn
 import os
 import torch
@@ -18,10 +20,11 @@ def make_zero_module(module):
     return module
 
 class ParentUNet:
-    def __init__(self, channel=3, time_dim=256, num_classes=None, device='cuda'):
+    def __init__(self, channel=3, time_dim=256, num_classes=None, device='cuda', dropout_prob=0):
         self.device = device
         self.time_dim = time_dim
         self.channel = channel
+        self.dropout_prob = dropout_prob
 
         if num_classes is not None:
             ## We try to condition on the classes that we may know of 
@@ -30,7 +33,7 @@ class ParentUNet:
             ## it has to be the same dimension as our time tensors
             ## as we are conditioning the noise learnt on both to improve
             ## training accuracy.
-            self.label_embedding = LabelEmbedder(num_classes, time_dim)
+            self.label_embedding = LabelEmbedder(num_classes, time_dim, dropout_prob=self.dropout_prob)
 
     def pos_encoding(self, t, channels):
         '''
@@ -51,13 +54,13 @@ class ParentUNet:
         pos_enc = torch.cat([pos_even_enc_a, pos_odd_enc_b], dim=-1)
         return pos_enc
     
-    def forward_decision(self, x, t, y, edges=None, cfg_scale=None):
+    def forward_decision(self, x, t, y, edges=None, cfg_scale=8):
         """
         Batches the unconditional forward pass for classifier-free guidance.
         """
-        if cfg_scale is None and edges is not None:
+        if self.dropout_prob == 0 and edges is not None:
           return self.forward(x, t, y, edges)
-        elif cfg_scale is None and edges is None:
+        elif self.dropout_prob == 0 and edges is None:
           return self.forward(x, t, y)
 
         half = x[: len(x) // 2]
@@ -78,14 +81,29 @@ class ParentUNet:
         return torch.cat([eps, rest], dim=1)
 
 
+class ConvNextV2ForImageClassificationWithAttributes(nn.Module, ParentUNet):
+    def __init__(self, num_classes, channels=3, device='cuda'):
+        super().__init__()
+        ParentUNet.__init__(self, channel=channels, num_classes=num_classes, device=device, dropout_prob=0)
+        self.convnextv2 = ConvNextV2ForImageClassification.from_pretrained("facebook/convnextv2-tiny-1k-224")
+
+    def forward(self, images, labels, time_emb):
+        time_emb = time_emb.unsqueeze(-1).type(torch.float)
+        time_emb = self.pos_encoding(time_emb, self.time_dim)
+        time_with_label += self.label_embedding(labels)
+        outputs = self.convnextv2(images, labels=time_with_label)
+        return outputs
+
+
 ## Implementing one of the commonly used architectures in diffusion models
 class UNet(nn.Module, ParentUNet):
     def __init__(self, c_in=3, c_out=3,
-                 num_classes=None, use_up_blocks=True, device='cuda'):
+                 num_classes=None, use_up_blocks=True,
+                 device='cuda', dropout_prob=0):
         ## c_in and c_out denotes the channels of the image
         ## In this case, both take the value 3.
         super().__init__()
-        ParentUNet.__init__(self, channel=c_out, num_classes=num_classes, device=device)
+        ParentUNet.__init__(self, channel=c_out, num_classes=num_classes, device=device, dropout_prob=dropout_prob)
 
         self.use_up_blocks = use_up_blocks
 
@@ -181,10 +199,10 @@ class ControlNet(nn.Module, ParentUNet):
     ## Down and mid blocks will be made with 0 parameters throughout all layers
 
     def __init__(self, hint_c_in=3, num_classes=None, 
-                 model_locked=True, device='cuda'):
+                 model_locked=True, device='cuda', dropout_prob=0):
         
         super().__init__()
-        ParentUNet.__init__(self, channel=hint_c_in, num_classes=num_classes, device=device)
+        ParentUNet.__init__(self, channel=hint_c_in, num_classes=num_classes, device=device, dropout_prob=dropout_prob)
     
         ## Load and instance of the UNet model
         ## We then load the previously saved checkpoint 

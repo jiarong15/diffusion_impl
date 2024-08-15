@@ -39,8 +39,7 @@ class Diffusion:
             return torch.clip(1 - (alpha_hat(t) / alpha_hat(t-1)), min=None, max=0.999)
         
         return torch.linspace(1e-4, 0.02, self.noise_steps)
-
-
+    
 
     def noise_images(self, x, t):
         '''
@@ -63,7 +62,7 @@ class Diffusion:
         ## Return a tuple of 2 parameters where the first parameter is 
         ## the function x(t) ustilizing the reparameterization trick
         ## Second parameter is the noise.
-        return sqrt_alpha_hat * x + sqrt_one_minus_alpha_hat * epsilon, epsilon
+        return sqrt_alpha_hat * x + sqrt_one_minus_alpha_hat * epsilon, sqrt_one_minus_alpha_hat, epsilon
     
     def sample_timesteps(self, n):
         '''

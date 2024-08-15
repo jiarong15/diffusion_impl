@@ -8,7 +8,7 @@ class LabelEmbedder(nn.Module):
     Embeds class labels into vector representations.
     Also handles label dropout for classifier-free guidance.
     """
-    def __init__(self, num_classes, hidden_size, dropout_prob=0.35):
+    def __init__(self, num_classes, hidden_size, dropout_prob=0):
         super().__init__()
         use_cfg_embedding = dropout_prob > 0
         self.embedding_table = nn.Embedding(num_classes + use_cfg_embedding, hidden_size)
@@ -24,7 +24,8 @@ class LabelEmbedder(nn.Module):
         return labels
 
     def forward(self, labels):
-        labels = self.token_drop(labels)
+        if self.dropout_prob > 0:
+            labels = self.token_drop(labels)
         embeddings = self.embedding_table(labels)
         return embeddings
 
