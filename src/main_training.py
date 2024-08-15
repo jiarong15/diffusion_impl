@@ -9,6 +9,7 @@ from diffusion_package.unet_model import UNet, ControlNet
 from diffusion_package.diffusion import Diffusion
 from diffusion_package.utils import get_data_loader
 from diffusion_package.helper_module import EMA
+from transformers import ConvNextV2ForImageClassification
 
 MODEL_CHECKPOINT_PATH = './model_storage/trained_unet_model.pt'
 
@@ -17,6 +18,9 @@ class Args:
 
 def train(args):
     device = args.device
+
+    # classifier_model = ConvNextV2ForImageClassification.from_pretrained("facebook/convnextv2-tiny-1k-224")
+    # classifier_optimizer = optim.AdamW(classifier_model.parameters(), lr=1e-5) 
 
     ## Load the UNet model or the ControlNet model
     if args.use_control_net == 1:
@@ -63,6 +67,21 @@ def train(args):
             labels = labels.to(device)
             edges = edges.to(device)
 
+            # ##############################
+            # classifier_optimizer.zero_grad()  # Clear any existing gradients
+            # classifer_outputs = classifier_model(images, labels=labels)
+            # classifier_loss = classifer_outputs.loss 
+            # classifier_loss.backward()
+
+            # # Calculate the overall gradient norm
+            # total_grad_norm_curr_round = 0
+            # for classifier_params in classifier_model.parameters():
+            #     if classifier_params.grad is not None:
+            #         param_norm = classifier_params.grad.detach().data.norm(2)
+            #         total_grad_norm_curr_round += param_norm.item() ** 2
+            # total_grad_norm_curr_round = total_grad_norm_curr_round ** 0.5
+            # ##############################
+
             ## We build a timestep tensor of size as huge as the number
             ## of image training data that we have. This time t is a 
             ## random integer generated.
@@ -74,11 +93,7 @@ def train(args):
             ## at x(75) = sqrt(alpha(75)) * x(0) +  sqrt(1 - alpha(75)) * epsilon.
             ## 75 steps of gaussian noise added from the original image at x(0).
             x_t, noise = diffusion.noise_images(images, t)
-
-            is_uncond_sampli_prob = np.random.random() < 0.1
-            if is_uncond_sampli_prob:
-                labels = None
-            
+       
             ## Prevent gradient accumulation by clearing
             ## all the gradient computation the optimizer is tracking.
             ## Gradient is tracked throughout a network 
@@ -91,9 +106,9 @@ def train(args):
             ## We train the model with labels and without labels at 
             ## 90% and 10% of the time respectively.
             if args.use_control_net == 1:
-                predicted_noise = model(x_t, t, labels, edges)
+                predicted_noise = model.forward_decision(x_t, t, labels, edges, cfg_scale=args.cfg_scale)
             else:
-                predicted_noise = model(x_t, t, labels)
+                predicted_noise = model.forward_decision(x_t, t, labels, cfg_scale=args.cfg_scale)
 
             ## Calculate the mean squared error of
             ## predicted noise and the actual noise as the loss value
@@ -124,11 +139,13 @@ def train(args):
         sampled_images = diffusion.sample(model, all_labels_in_this_epoch.to(torch.int64),
                                           all_edges_in_this_epoch,
                                           all_images_in_this_epoch.shape[0],
-                                          args.use_control_net)
+                                          args.use_control_net,
+                                          cfg_scale=args.cfg_scale)
         ema_sampled_images = diffusion.sample(ema_model, all_labels_in_this_epoch.to(torch.int64),
                                               all_edges_in_this_epoch,
                                               all_images_in_this_epoch.shape[0],
-                                              args.use_control_net)
+                                              args.use_control_net,
+                                              cfg_scale=args.cfg_scale)
     
     ## Only save when we run the normal model
     ## since part of the initialization in the 
@@ -141,8 +158,6 @@ def train(args):
 
 def launch():
     args = Args()
-
-    # Uncomment for jupyter run
     args.run_name = 'diffusion_model'
     args.use_parameterization = True
     args.num_classes = 10
@@ -151,6 +166,10 @@ def launch():
     args.use_control_net = 1
     args.is_data_loader_shuffle = True
     args.image_size = 32
+
+    ## set cfg_scale to None for 
+    ## non-classifier free guidance training run
+    args.cfg_scale = 8
     args.device = None
     args.lr = 3e-4
     train(args)

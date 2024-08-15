@@ -22,9 +22,11 @@ Personal Notes:
 * **1st optimization**: Classifier Free Guidance added helps to aid additional information during training by indicating the class label of the images trained assuming we have information to the classes when training. We train the model with labels and without labels at 90% and 10% of the time respectively
 * **2nd optimization**: We apply EMA smoothing only after some training is done by the original model. This is for reasons explained in the EMA blog by nvidia above
 * **3rd optimization**: Use of control net that can allow more features of the image to be part of training. e.g. Canny edges, Hough lines, user scribbles, segmentation maps, depths
+* **4th optimization**: Added Diffusion transformers that can be used as well
 
 Good to have:
 * We can use a pretrained model or build another model and use it as a classifier model to predict the image lables given the noisy images and as it the classifier is trained, we use the gradient to help in diffusion training
+
 
 
 

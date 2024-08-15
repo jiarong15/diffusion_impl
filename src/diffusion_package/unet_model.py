@@ -1,4 +1,4 @@
-from .helper_module import DoubleConv, Down, Up, SelfAttention
+from .helper_module import DoubleConv, Down, Up, SelfAttention, LabelEmbedder
 import torch.nn as nn
 import os
 import torch
@@ -18,9 +18,10 @@ def make_zero_module(module):
     return module
 
 class ParentUNet:
-    def __init__(self, time_dim=256, num_classes=None, device='cuda'):
+    def __init__(self, channel=3, time_dim=256, num_classes=None, device='cuda'):
         self.device = device
         self.time_dim = time_dim
+        self.channel = channel
 
         if num_classes is not None:
             ## We try to condition on the classes that we may know of 
@@ -29,7 +30,7 @@ class ParentUNet:
             ## it has to be the same dimension as our time tensors
             ## as we are conditioning the noise learnt on both to improve
             ## training accuracy.
-            self.label_embedding = nn.Embedding(num_classes, time_dim)
+            self.label_embedding = LabelEmbedder(num_classes, time_dim)
 
     def pos_encoding(self, t, channels):
         '''
@@ -49,6 +50,32 @@ class ParentUNet:
         ## Stack the even and odd tensors along y axis
         pos_enc = torch.cat([pos_even_enc_a, pos_odd_enc_b], dim=-1)
         return pos_enc
+    
+    def forward_decision(self, x, t, y, edges=None, cfg_scale=None):
+        """
+        Batches the unconditional forward pass for classifier-free guidance.
+        """
+        if cfg_scale is None and edges is not None:
+          return self.forward(x, t, y, edges)
+        elif cfg_scale is None and edges is None:
+          return self.forward(x, t, y)
+
+        half = x[: len(x) // 2]
+        combined = torch.cat([half, half], dim=0)
+        if edges is not None:
+          model_out = self.forward(combined, t, y, edges)
+        else:
+          model_out = self.forward(combined, t, y)
+        eps, rest = model_out[:, :self.channel], model_out[:, self.channel:]
+        cond_eps, uncond_eps = torch.split(eps, len(eps) // 2, dim=0)
+
+        ## We then perform linear interpolation to move towards
+        ## the conditional sample over the unconditional sample
+        ## as following the CFG formula. Also a usual CFG scale
+        ## of 7.5 - 10 is used. I chose 8
+        half_eps = uncond_eps + cfg_scale * (cond_eps - uncond_eps)
+        eps = torch.cat([half_eps, half_eps], dim=0)
+        return torch.cat([eps, rest], dim=1)
 
 
 ## Implementing one of the commonly used architectures in diffusion models
@@ -58,7 +85,7 @@ class UNet(nn.Module, ParentUNet):
         ## c_in and c_out denotes the channels of the image
         ## In this case, both take the value 3.
         super().__init__()
-        ParentUNet.__init__(self, num_classes=num_classes, device=device)
+        ParentUNet.__init__(self, channel=c_out, num_classes=num_classes, device=device)
 
         self.use_up_blocks = use_up_blocks
 
@@ -109,9 +136,7 @@ class UNet(nn.Module, ParentUNet):
         ## value being float.
         t = t.unsqueeze(-1).type(torch.float)
         t = self.pos_encoding(t, self.time_dim)
-
-        if y is not None:
-            t += self.label_embedding(y)
+        t += self.label_embedding(y)
 
         ## Related to self.conv_in
         x1 = self.inc(x) # DoubleConv
@@ -159,7 +184,7 @@ class ControlNet(nn.Module, ParentUNet):
                  model_locked=True, device='cuda'):
         
         super().__init__()
-        ParentUNet.__init__(self, num_classes=num_classes, device=device)
+        ParentUNet.__init__(self, channel=hint_c_in, num_classes=num_classes, device=device)
     
         ## Load and instance of the UNet model
         ## We then load the previously saved checkpoint 
@@ -253,9 +278,7 @@ class ControlNet(nn.Module, ParentUNet):
         ## value being float.
         t = t.unsqueeze(-1).type(torch.float)
         t = self.pos_encoding(t, self.time_dim)
-
-        if y is not None:
-            t += self.label_embedding(y)
+        t += self.label_embedding(y)
         
         trained_unet_t = t.clone()
         trained_unet_down_outs = []

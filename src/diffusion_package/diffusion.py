@@ -74,7 +74,7 @@ class Diffusion:
         '''
         return torch.randint(low=1, high=self.noise_steps, size=(n,))
 
-    def sample(self, model, labels, edges, n, use_control_net, cfg_scale=8):
+    def sample(self, model, labels, edges, n, use_control_net, cfg_scale=None):
 
         ## Used to switch off behaviours in layers/parts
         ## of the ML model even as we inference it in the loop
@@ -100,26 +100,9 @@ class Diffusion:
                 t = (torch.ones(n) * i).long().to(self.device)
 
                 if use_control_net == 1:
-                    predicted_noise = model(x, t, labels, edges)
+                    predicted_noise = model.forward_decision(x, t, labels, edges, cfg_scale=cfg_scale)
                 else:
-                    predicted_noise = model(x, t, labels)
-
-                ## We don't want to include the labels, so
-                ## we are just conditioning on the time
-                ## and leaving out the labels
-                if use_control_net == 1:
-                    unconditioned_predicted_noise = model(x, t, None, edges)
-                else:
-                    unconditioned_predicted_noise = model(x, t, None)
-                    
-
-                ## We then perform linear interpolation to move towards
-                ## the conditional sample over the unconditional sample
-                ## as following the CFG formula. Also a usual CFG scale
-                ## of 7.5 - 10 is used. I chose 8
-                predicted_noise = torch.lerp(unconditioned_predicted_noise,
-                                             predicted_noise,
-                                             cfg_scale)
+                    predicted_noise = model.forward_decision(x, t, labels, cfg_scale=cfg_scale)
 
                 ## After sampling alpha, alpha_hat and beta at 
                 ## time step i, it becomes a 1D tensor.

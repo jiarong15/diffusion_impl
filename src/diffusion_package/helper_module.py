@@ -2,6 +2,33 @@ import torch.nn as nn
 from torch.nn import functional as F
 import torch
 
+
+class LabelEmbedder(nn.Module):
+    """
+    Embeds class labels into vector representations.
+    Also handles label dropout for classifier-free guidance.
+    """
+    def __init__(self, num_classes, hidden_size, dropout_prob=0.35):
+        super().__init__()
+        use_cfg_embedding = dropout_prob > 0
+        self.embedding_table = nn.Embedding(num_classes + use_cfg_embedding, hidden_size)
+        self.num_classes = num_classes
+        self.dropout_prob = dropout_prob
+
+    def token_drop(self, labels):
+        """
+        Drops labels to enable classifier-free guidance.
+        """
+        drop_ids = torch.rand(labels.shape[0], device=labels.device) < self.dropout_prob
+        labels = torch.where(drop_ids, self.num_classes, labels)
+        return labels
+
+    def forward(self, labels):
+        labels = self.token_drop(labels)
+        embeddings = self.embedding_table(labels)
+        return embeddings
+
+
 class EMA:
     def __init__(self, beta):
         self.beta = beta
