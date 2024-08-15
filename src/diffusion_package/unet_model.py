@@ -69,6 +69,10 @@ class ParentUNet:
           model_out = self.forward(combined, t, y, edges)
         else:
           model_out = self.forward(combined, t, y)
+
+        ## eps represent the noise prediction while rest
+        ## is the additional information that isn't needed for
+        ## the guidance step
         eps, rest = model_out[:, :self.channel], model_out[:, self.channel:]
         cond_eps, uncond_eps = torch.split(eps, len(eps) // 2, dim=0)
 
@@ -82,6 +86,14 @@ class ParentUNet:
 
 
 class ConvNextV2ForImageClassificationWithAttributes(nn.Module, ParentUNet):
+    '''
+    Class is built because the pretrained model only accept images and labels,
+    2 parameters hence, will have to combine the time and and label embeddding 
+    together first before passing into the pretrained model.
+
+    Pretrained model utilized to assist in classifier guided diffusion
+
+    '''
     def __init__(self, num_classes, channels=3, device='cuda'):
         super().__init__()
         ParentUNet.__init__(self, channel=channels, num_classes=num_classes, device=device, dropout_prob=0)
