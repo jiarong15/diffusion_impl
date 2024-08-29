@@ -62,7 +62,7 @@ class Diffusion:
         ## Return a tuple of 2 parameters where the first parameter is 
         ## the function x(t) ustilizing the reparameterization trick
         ## Second parameter is the noise.
-        return sqrt_alpha_hat * x + sqrt_one_minus_alpha_hat * epsilon, sqrt_one_minus_alpha_hat, epsilon
+        return sqrt_alpha_hat * x + sqrt_one_minus_alpha_hat * epsilon, sqrt_alpha_hat, sqrt_one_minus_alpha_hat, epsilon
     
     def sample_timesteps(self, n):
         '''
