@@ -23,10 +23,16 @@ Personal Notes:
 * **2nd optimization**: We apply EMA smoothing only after some training is done by the original model. This is for reasons explained in the EMA blog by nvidia above
 * **3rd optimization**: Use of control net that can allow more features of the image to be part of training. e.g. Canny edges, Hough lines, user scribbles, segmentation maps, depths
 * **4th optimization**: Added Diffusion transformers that can be used as well
+* **5th optimization**: Added distillation training following the 3rd prediction method on **figure 1**, following the research paper
 
-Good to have:
+<p>&nbsp;</p>
+
+**Good to have**:
 * We can use a pretrained model or build another model and use it as a classifier model to predict the image lables given the noisy images and as it the classifier is trained, we use the gradient to help in diffusion training
 
 
+<p>&nbsp;</p>
+<p>&nbsp;</p>
 
-
+<span style="display:block;text-align:center">![alt text](image.png))</span>
+<div align="center"> (figure 1) </div>

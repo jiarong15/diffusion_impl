@@ -79,7 +79,7 @@ def train(args):
             ## integer of time t say t = 75, we get an arbitrary image 
             ## at x(75) = sqrt(alpha(75)) * x(0) +  sqrt(1 - alpha(75)) * epsilon.
             ## 75 steps of gaussian noise added from the original image at x(0).
-            x_t, classifier_guided_weights, noise = diffusion.noise_images(images, t)
+            x_t, _, sigma_t, noise = diffusion.noise_images(images, t)
        
             ## Prevent gradient accumulation by clearing
             ## all the gradient computation the optimizer is tracking.
@@ -97,7 +97,7 @@ def train(args):
             else:
                 predicted_noise = model.forward_decision(x_t, t, labels, cfg_scale=args.cfg_scale)
                 
-                ## Perform classifier guided diffusionn
+                ## Perform classifier guided diffusion
                 classifier_optimizer.zero_grad()  # Clear any existing gradients
                 classifer_outputs = classifier_model.forward_decision(x_t, t, labels, cfg_scale=args.cfg_scale)
                 classifier_loss = classifer_outputs.loss
@@ -115,7 +115,7 @@ def train(args):
                 ## can range from 0.1 to 10. The more it 
                 ## controls the strength of the class guidance
                 w = 7.5
-                predicted_noise = predicted_noise - classifier_guided_weights * w * total_grad_norm_curr_round
+                predicted_noise = predicted_noise - sigma_t * w * total_grad_norm_curr_round
 
             ## Calculate the mean squared error of
             ## predicted noise and the actual noise as the loss value
