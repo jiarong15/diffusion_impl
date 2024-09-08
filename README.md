@@ -23,7 +23,7 @@ Personal Notes:
 * **2nd optimization**: We apply EMA smoothing only after some training is done by the original model. This is for reasons explained in the EMA blog by nvidia above
 * **3rd optimization**: Use of control net that can allow more features of the image to be part of training. e.g. Canny edges, Hough lines, user scribbles, segmentation maps, depths
 * **4th optimization**: Added Diffusion transformers that can be used as well
-* **5th optimization**: Added distillation training following the 3rd prediction method on **figure 1**, following the research paper
+* **5th optimization**: Added distillation training following the 3rd prediction method on  ****figure 1**, following the research paper
 
 <p>&nbsp;</p>
 
