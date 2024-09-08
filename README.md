@@ -34,5 +34,5 @@ Personal Notes:
 <p>&nbsp;</p>
 <p>&nbsp;</p>
 
-<span style="display:block;text-align:center">![alt text](image.png))</span>
+<span style="display:block;text-align:center">![alt text](./src/assets/image.png))</span>
 <div align="center"> (figure 1) </div>

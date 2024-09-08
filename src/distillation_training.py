@@ -103,7 +103,6 @@ def train_distillation(args):
             v_2 = alpha_s_half * eps_2 - sigma_s_half * x_hat_2
 
             w = torch.pow(1 + alpha_s_half / sigma_s_half, 0.3)
-
             predicted_noise = student_model.forward_decision(x_t_plus_one, t, labels, cfg_scale=args.cfg_scale)
 
             loss = mse(w * predicted_noise, w * v_2)
