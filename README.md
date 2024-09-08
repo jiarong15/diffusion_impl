@@ -1,4 +1,4 @@
-# Implementation of diffusion model for learning purpose. 
+# Implementation of diffusion model for learning
 
 > Included the explanations for many of the variables, use case of the different functions and how it relates back to the research paper in the link below.
 Mathematical source for reference: https://lilianweng.github.io/posts/2021-07-11-diffusion-models/
@@ -32,7 +32,8 @@ Personal Notes:
 
 
 <p>&nbsp;</p>
-<p>&nbsp;</p>
 
-<span style="display:block;text-align:center">![alt text](./src/assets/image.png))</span>
+<div style="text-align:center"><img src=./src/assets/image.png /></div>
 <div align="center"> (figure 1) </div>
+
+
