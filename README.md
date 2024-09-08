@@ -33,7 +33,7 @@ Personal Notes:
 
 <p>&nbsp;</p>
 
-<div style="text-align:center"><img src=./src/assets/image.png /></div>
+<p align="right" width="100%"><img src=./src/assets/image.png /></p>
 <div align="center"> (figure 1) </div>
 
 
